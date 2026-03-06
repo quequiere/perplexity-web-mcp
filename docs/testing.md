@@ -15,48 +15,7 @@ npm run build
 
 ---
 
-## Test 1 — Anonymous search (quickest)
-
-The fastest way to validate the search tool works — no login required.
-
-```bash
-# Linux / macOS
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"query":"what is the MCP protocol"}}}' | node dist/index.js
-```
-
-```powershell
-# Windows (PowerShell)
-'{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"query":"what is the MCP protocol"}}}' | node dist/index.js
-```
-
-```bash
-# Windows (Git Bash / MINGW64) — pipe stdin via file to avoid tty issues
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"search","arguments":{"query":"what is the MCP protocol"}}}' > /tmp/mcp-test.json
-node dist/index.js < /tmp/mcp-test.json
-```
-
-**Expected output** on stdout:
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 1,
-  "result": {
-    "content": [{ "type": "text", "text": "The Model Context Protocol (MCP) is..." }]
-  }
-}
-```
-
-**Expected output** on stderr:
-
-```
-[perplexity-web-mcp] Starting (timeout=20000ms)...
-[perplexity-web-mcp] Ready. Browser will launch on first tool call.
-```
-
----
-
-## Test 2 — Authentication via the `login` tool
+## Test 1 — Authentication via the `login` tool
 
 Call the `login` tool to authenticate with a Perplexity account. The browser opens on demand — no `--auth` flag needed.
 
@@ -93,7 +52,7 @@ Your session is persisted in `.playwright/profile/` — you will not need to log
 
 ---
 
-## Test 3 — Integration with Claude Code
+## Test 2 — Integration with Claude Code
 
 Add the following to your Claude Code MCP settings (`.claude/settings.json`):
 
@@ -109,8 +68,8 @@ Add the following to your Claude Code MCP settings (`.claude/settings.json`):
 ```
 
 Then:
-- Ask Claude: **"Search for TypeScript best practices using perplexity"** (anonymous)
-- Or ask Claude: **"Login to Perplexity"** to authenticate before searching
+- Ask Claude: **"Login to Perplexity"** to authenticate
+- Then ask Claude: **"Search for TypeScript best practices using perplexity"**
 
 ---
 

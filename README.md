@@ -14,7 +14,7 @@ A lightweight MCP (Model Context Protocol) server that enables AI assistants to 
 
 ### Key features
 
-- **Authenticated or anonymous** — use the `login` tool to authenticate once, or search anonymously without any setup
+- **Login once, search forever** — use the `login` tool to authenticate once; your session persists across restarts
 - **Lazy browser launch** — the browser only opens on the first tool call, not at server startup
 - **Always visible browser** — runs non-headless to bypass Cloudflare's bot detection (the window stays in the background during searches)
 - **Sources included** — returns cited URLs alongside the answer text
@@ -175,7 +175,6 @@ npm run typecheck
 
 See **[docs/testing.md](docs/testing.md)** for a full step-by-step guide covering:
 
-- Anonymous mode (no login required)
 - First-time authentication flow
 - Persistent session verification
 - Integration with Claude Code / Claude Desktop
