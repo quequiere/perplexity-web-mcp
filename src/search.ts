@@ -41,6 +41,9 @@ async function runSearch(query: string, timeoutMs: number, sources: string[] | n
     await page.goto(PERPLEXITY_HOME, { waitUntil: "domcontentloaded" });
     await dismissDialogs(page);
 
+    // Wait for the search input to be ready before any further interaction
+    await page.locator("#ask-input").first().waitFor({ state: "visible", timeout: 10_000 });
+
     if (sources) {
       log(`Selecting sources: [${sources.join(", ")}]...`);
       await selectSources(page, sources);
