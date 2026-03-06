@@ -83,14 +83,13 @@ Checks if you are authenticated on Perplexity.ai. If not, opens a browser window
 
 ### `search`
 
-Performs a search on Perplexity.ai and returns the answer with sources.
+Performs a search on Perplexity.ai using default settings and returns the answer with sources. Prefer this for general queries.
 
 **Parameters:**
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `query` | `string` | Yes | The search query |
-| `mode` | `string` | No | Search focus: `web` (default), `academic`, `news`, `youtube`, `reddit` |
 
 **Returns:**
 
@@ -100,6 +99,23 @@ The capital of France is Paris...
 Sources:
 1. [Capital City of France - CountryReports](https://www.countryreports.org/...)
 ```
+
+---
+
+### `search_advanced`
+
+Same as `search` but lets you select which sources Perplexity searches. You can combine multiple sources. Uses browser UI automation to toggle the source checkboxes — more powerful but slightly less resilient to UI changes.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `query` | `string` | Yes | The search query |
+| `sources` | `string[]` | Yes | One or more sources: `web`, `academic`, `social` |
+
+**Example:** `sources: ["web", "academic"]` searches both general web and scholarly articles simultaneously.
+
+**Returns:** Same format as `search`.
 
 ---
 
@@ -142,6 +158,13 @@ Sources:
 │  │    ├── wait for answer to complete (DOM signal)            │ │
 │  │    ├── extract answer text from DOM                        │ │
 │  │    ├── extract cited sources                               │ │
+│  │    └── close tab                                           │ │
+│  │                                                            │ │
+│  │  search_advanced(query, sources[])                         │ │
+│  │    ├── open new tab, navigate to perplexity.ai             │ │
+│  │    ├── open "+" menu → "Connecteurs et sources"            │ │
+│  │    ├── toggle source checkboxes to match requested sources │ │
+│  │    ├── type query, wait for answer, extract DOM            │ │
 │  │    └── close tab                                           │ │
 │  └────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────┘
@@ -186,7 +209,8 @@ See **[docs/testing.md](docs/testing.md)** for a full step-by-step guide coverin
 1. **Lazy browser launch** — the browser only opens when the first tool (`login` or `search`) is called, not at server startup.
 2. **Login** — the `login` tool calls `GET /api/auth/session` to check the persisted session. If no session is found, a browser window opens and the server waits for the user to log in (up to 5 minutes).
 3. **Search** — the `search` tool opens a new tab, navigates to `perplexity.ai`, types the query, and waits for Perplexity's answer to complete (detected via a DOM signal — the "N sources" button appearing).
-4. **Extraction** — the answer and sources are extracted from the DOM and returned as text to the MCP client. The tab is then closed.
+4. **Search Advanced** — `search_advanced` does the same but first opens the source selector menu and toggles the requested sources (identified by their SVG icon IDs, which are locale-independent).
+5. **Extraction** — the answer and sources are extracted from the DOM and returned as text to the MCP client. The tab is then closed.
 5. **Visible browser** — the browser always runs non-headless to pass Cloudflare's Turnstile bot detection, which reliably blocks headless Chromium regardless of stealth patches.
 
 ---

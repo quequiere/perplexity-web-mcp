@@ -4,6 +4,13 @@ import { newSearchPage } from "./browser.js";
 const PERPLEXITY_HOME = "https://www.perplexity.ai/";
 export const DEFAULT_TIMEOUT_MS = 20_000;
 
+// Maps source name to its SVG icon id in the Perplexity UI — locale-independent
+const SOURCE_ICON: Record<string, string> = {
+  web:      "#pplx-icon-world",
+  academic: "#pplx-icon-books",
+  social:   "#pplx-icon-social",
+};
+
 export interface Source {
   title: string;
   url: string;
@@ -18,14 +25,26 @@ const log = (msg: string) => console.error(`[perplexity-web-mcp] ${msg}`);
 
 export async function search(query: string, timeoutMs: number): Promise<SearchResult> {
   log(`Search: "${query}" (timeout: ${timeoutMs}ms)`);
+  return runSearch(query, timeoutMs, null);
+}
+
+export async function searchWithSources(query: string, timeoutMs: number, sources: string[]): Promise<SearchResult> {
+  log(`Search: "${query}" sources=[${sources.join(",")}] (timeout: ${timeoutMs}ms)`);
+  return runSearch(query, timeoutMs, sources);
+}
+
+async function runSearch(query: string, timeoutMs: number, sources: string[] | null): Promise<SearchResult> {
   const page = await newSearchPage();
 
   try {
     log("Navigating to perplexity.ai...");
     await page.goto(PERPLEXITY_HOME, { waitUntil: "domcontentloaded" });
-
-    // Dismiss cookie banner and login overlay before interacting
     await dismissDialogs(page);
+
+    if (sources) {
+      log(`Selecting sources: [${sources.join(", ")}]...`);
+      await selectSources(page, sources);
+    }
 
     log("Typing query...");
     await page.keyboard.press("Escape");
@@ -42,22 +61,79 @@ export async function search(query: string, timeoutMs: number): Promise<SearchRe
     await searchBox.press("Enter");
 
     log("Waiting for answer to complete...");
-    await page.waitForSelector('button:has-text("sources")', { timeout: timeoutMs });
+    // Perplexity shows a "N sources" button when the answer finishes.
+    // The word varies by UI language — match any button whose text contains digits.
+    await page.locator("button").filter({ hasText: /\d/ }).first().waitFor({ timeout: timeoutMs });
 
-    // Dismiss signup dialog that may appear after search in anonymous mode
     await dismissDialogs(page);
 
     log("Extracting answer from DOM...");
-    const [answer, sources] = await Promise.all([
+    const [answer, citedSources] = await Promise.all([
       extractAnswer(page),
       extractSources(page),
     ]);
 
-    log(`Done. Answer length: ${answer.length} chars, sources: ${sources.length}`);
-    return { answer, sources };
+    log(`Done. Answer length: ${answer.length} chars, sources: ${citedSources.length}`);
+    return { answer, sources: citedSources };
   } finally {
     await page.close();
   }
+}
+
+// Selects the given sources in the Perplexity "Connecteurs et sources" submenu.
+// All icon IDs are locale-independent — they don't change with UI language.
+async function selectSources(page: Page, sources: string[]): Promise<void> {
+  const targetIcons = sources.map(s => SOURCE_ICON[s]).filter(Boolean);
+  if (targetIcons.length === 0) return;
+
+  // Open the "+" menu — located by its icon #pplx-icon-plus
+  const addBtnLabel = await page.evaluate(() => {
+    const btn = Array.from(document.querySelectorAll('button[aria-haspopup="menu"]')).find(b => {
+      const use = b.querySelector('use');
+      return use && (use.getAttribute('xlink:href') === '#pplx-icon-plus' || use.getAttribute('href') === '#pplx-icon-plus');
+    });
+    return btn?.getAttribute('aria-label') ?? null;
+  });
+  if (!addBtnLabel) throw new Error("Could not find the + (add) button on Perplexity");
+  await page.locator(`button[aria-label="${addBtnLabel}"]`).click();
+  await page.waitForTimeout(300);
+
+  // Open "Connecteurs et sources" submenu — located by its icon #pplx-icon-plug
+  const connLabel = await page.evaluate(() => {
+    const item = Array.from(document.querySelectorAll('[role="menuitem"]')).find(el => {
+      const use = el.querySelector('use');
+      return use && (use.getAttribute('xlink:href') === '#pplx-icon-plug' || use.getAttribute('href') === '#pplx-icon-plug');
+    });
+    return item?.getAttribute('aria-label') ?? item?.textContent?.trim() ?? null;
+  });
+  if (!connLabel) throw new Error("Could not find 'Connecteurs et sources' menuitem");
+  await page.locator('[role="menuitem"]').filter({ hasText: connLabel.slice(0, 10) }).click();
+  await page.locator('[role="menuitemcheckbox"]').first().waitFor({ state: "visible", timeout: 3_000 });
+
+  // Read current state of all checkboxes
+  const getCheckboxInfo = (iconId: string) => page.evaluate((id) => {
+    const item = Array.from(document.querySelectorAll('[role="menuitemcheckbox"]')).find(el => {
+      const use = el.querySelector('use');
+      return use && (use.getAttribute('xlink:href') === id || use.getAttribute('href') === id);
+    });
+    return item ? { label: item.getAttribute('aria-label') ?? item.textContent?.trim() ?? "", checked: item.getAttribute('aria-checked') === 'true' } : null;
+  }, iconId);
+
+  // Build the desired state: check targets, uncheck everything else
+  const allIcons = Object.values(SOURCE_ICON);
+  for (const icon of allIcons) {
+    const info = await getCheckboxInfo(icon);
+    if (!info || !info.label) continue;
+    const shouldBeChecked = targetIcons.includes(icon);
+    if (info.checked !== shouldBeChecked) {
+      await page.locator('[role="menuitemcheckbox"]').filter({ hasText: info.label }).click();
+      await page.waitForTimeout(200);
+    }
+  }
+
+  // Close menus
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
 }
 
 async function dismissDialogs(page: Page): Promise<void> {

@@ -69,7 +69,8 @@ Add the following to your Claude Code MCP settings (`.claude/settings.json`):
 
 Then:
 - Ask Claude: **"Login to Perplexity"** to authenticate
-- Then ask Claude: **"Search for TypeScript best practices using perplexity"**
+- Ask Claude: **"Search for TypeScript best practices using perplexity"** — uses `search`
+- Ask Claude: **"Search for AI research papers using perplexity with web and academic sources"** — uses `search_advanced`
 
 ---
 
