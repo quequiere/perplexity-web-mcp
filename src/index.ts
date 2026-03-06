@@ -22,7 +22,7 @@ const TIMEOUT_MS = timeoutArg ? parseInt(timeoutArg.split("=")[1], 10) * 1000 : 
 // --- MCP server ---
 const mcp = new FastMCP({
   name: "perplexity-web",
-  version: "1.1.0",
+  version: "1.1.1",
 });
 
 mcp.addTool({
