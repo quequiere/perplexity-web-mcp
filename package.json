@@ -1,0 +1,37 @@
+{
+  "name": "perplexity-web-mcp",
+  "version": "1.0.0",
+  "description": "Lightweight MCP server for searching Perplexity.ai via browser automation",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "perplexity-web-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "postinstall": "playwright install chromium",
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "mcp",
+    "perplexity",
+    "ai",
+    "search",
+    "playwright"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "fastmcp": "^3.34.0",
+    "playwright": "^1.58.2",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

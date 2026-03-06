@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.playwright/
+network-analysis.md
+*.log
+.env
