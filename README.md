@@ -38,7 +38,15 @@ That's it — no clone, no build required.
 
 ## MCP configuration
 
-Add to your MCP config (`claude_desktop_config.json` or `.claude/settings.json`):
+### Claude Code
+
+```bash
+claude mcp add perplexity-web -- npx perplexity-web-mcp@latest
+```
+
+### Claude Desktop / other clients
+
+Add to your MCP config (`.claude.json`):
 
 ```json
 {
