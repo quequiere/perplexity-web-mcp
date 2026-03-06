@@ -1,13 +1,32 @@
 import { chromium, type BrowserContext, type Page } from "playwright";
 import path from "path";
 import { fileURLToPath } from "url";
+import { execSync } from "child_process";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROFILE_DIR = path.resolve(__dirname, "../.playwright/profile");
 
+function checkChromiumInstalled(): void {
+  try {
+    execSync("npx playwright install --dry-run chromium", { stdio: "ignore" });
+  } catch {
+    // dry-run not available in all versions, fall back to checking executablePath
+  }
+  try {
+    chromium.executablePath();
+  } catch {
+    console.error(
+      "[perplexity-web-mcp] Chromium is not installed.\n" +
+      "Run: npx playwright install chromium"
+    );
+    process.exit(1);
+  }
+}
+
 let context: BrowserContext | null = null;
 
 export async function launchBrowser(): Promise<void> {
+  checkChromiumInstalled();
   if (context) {
     await context.close();
     context = null;

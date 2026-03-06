@@ -22,6 +22,79 @@ A lightweight MCP (Model Context Protocol) server that enables AI assistants to 
 
 ---
 
+## Installation
+
+**Prerequisites:**
+- [Node.js](https://nodejs.org/) >= 20
+- Chromium (via Playwright): `npx playwright install chromium`
+
+```bash
+npx playwright install chromium
+```
+
+That's it — no clone, no build required.
+
+---
+
+## MCP configuration
+
+Add to your MCP config (`claude_desktop_config.json` or `.claude/settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "perplexity-web": {
+      "command": "npx",
+      "args": ["perplexity-web-mcp@latest"]
+    }
+  }
+}
+```
+
+Optional flag: `--timeout=N` — max seconds to wait for an answer (default: `20`).
+
+To authenticate, ask your AI client to call the `login` tool once. A Chromium window will open for you to sign in. Your session is persisted in `.playwright/profile/` and reused on future runs.
+
+> **Why is a browser window visible?** Perplexity.ai uses Cloudflare Turnstile which blocks headless browsers. The window stays in the background and requires no interaction during normal use.
+
+---
+
+## MCP Tools
+
+### `login`
+
+Checks if you are authenticated on Perplexity.ai. If not, opens a browser window so you can log in.
+
+**Parameters:** none
+
+**Returns:** A status message — either `"Already authenticated"` or `"Login successful"` after the user completes the login flow.
+
+> Your session is persisted in `.playwright/profile/` — you only need to call `login` once, or after a session expiry.
+
+---
+
+### `search`
+
+Performs a search on Perplexity.ai and returns the answer with sources.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `query` | `string` | Yes | The search query |
+| `mode` | `string` | No | Search focus: `web` (default), `academic`, `news`, `youtube`, `reddit` |
+
+**Returns:**
+
+```
+The capital of France is Paris...
+
+Sources:
+1. [Capital City of France - CountryReports](https://www.countryreports.org/...)
+```
+
+---
+
 ## Architecture
 
 ```
@@ -69,113 +142,8 @@ A lightweight MCP (Model Context Protocol) server that enables AI assistants to 
               ┌──────────────────────┐
               │   perplexity.ai      │
               │  (real browser req)  │
-              │                      │
-              │  GET  /api/auth/     │
-              │    session           │
               └──────────────────────┘
 ```
-
----
-
-## Installation
-
-### Prerequisites
-
-- [Node.js](https://nodejs.org/) >= 18
-- [npm](https://www.npmjs.com/) or [bun](https://bun.sh/)
-
-### Install
-
-```bash
-git clone https://github.com/YOUR_USERNAME/perplexity-web-mcp.git
-cd perplexity-web-mcp
-npm install
-npx playwright install chromium
-npm run build
-```
-
----
-
-## Usage
-
-### Why is a browser window visible?
-
-Perplexity.ai is protected by **Cloudflare Turnstile**, which reliably detects and blocks headless browsers — even with stealth patches. Running the browser in visible mode is the only reliable way to pass this check. The window appears in the background and does not require any interaction during normal use.
-
-### Starting the MCP server
-
-```bash
-# Default mode — browser launches on first tool call
-node dist/index.js
-
-# Custom timeout (default: 20 seconds)
-node dist/index.js --timeout=40
-```
-
-### CLI flags
-
-| Flag | Description |
-|------|-------------|
-| `--timeout=N` | Max seconds to wait for an answer (default: `20`) |
-
-### Authentication
-
-Authentication is handled via the `login` MCP tool — no CLI flag needed. Call `login` once from your AI client; a Chromium window will open for you to sign in. Your session is persisted in `.playwright/profile/` and reused on future runs.
-
----
-
-## MCP Tools
-
-### `login`
-
-Checks if you are authenticated on Perplexity.ai. If not, opens a browser window so you can log in.
-
-**Parameters:** none
-
-**Returns:** A status message — either `"Already authenticated"` or `"Login successful"` after the user completes the login flow.
-
-> Your session is persisted in `.playwright/profile/` — you only need to call `login` once, or after a session expiry.
-
----
-
-### `search`
-
-Performs a search on Perplexity.ai and returns the answer with sources.
-
-**Parameters:**
-
-| Name | Type | Required | Description |
-|------|------|----------|-------------|
-| `query` | `string` | Yes | The search query |
-| `mode` | `string` | No | Search focus: `web` (default), `academic`, `news`, `youtube`, `reddit` |
-
-**Returns:**
-
-```
-The capital of France is Paris...
-
-Sources:
-1. [Capital City of France - CountryReports](https://www.countryreports.org/...)
-```
-
----
-
-## Claude Desktop / Claude Code configuration
-
-Add to your MCP config (`claude_desktop_config.json` or `.claude/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "perplexity-web": {
-      "command": "node",
-      "args": ["/path/to/perplexity-web-mcp/dist/index.js"]
-    }
-  }
-}
-```
-
-To authenticate, ask your AI client to call the `login` tool once.
 
 ---
 
@@ -193,24 +161,6 @@ npm run lint
 
 # Type check
 npm run typecheck
-```
-
-### Project structure
-
-```
-perplexity-web-mcp/
-├── src/
-│   ├── index.ts          # MCP server entry point + CLI args
-│   ├── browser.ts        # Playwright browser manager
-│   ├── auth.ts           # Session check + login flow
-│   └── search.ts         # Search tool implementation
-├── docs/
-│   └── testing.md        # Local testing guide
-├── dist/                 # Compiled output
-├── .playwright/          # Browser user data (session persistence)
-├── package.json
-├── tsconfig.json
-└── README.md
 ```
 
 ### Testing locally

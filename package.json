@@ -7,8 +7,12 @@
   "bin": {
     "perplexity-web-mcp": "dist/index.js"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
-    "postinstall": "playwright install chromium",
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
@@ -22,8 +26,15 @@
     "search",
     "playwright"
   ],
-  "author": "",
+  "author": "quequiere",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/quequiere/perplexity-web-mcp"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "fastmcp": "^3.34.0",
     "playwright": "^1.58.2",
