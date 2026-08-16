@@ -2,7 +2,7 @@ import type { Page } from "playwright";
 import { newSearchPage } from "./browser.js";
 
 const PERPLEXITY_HOME = "https://www.perplexity.ai/";
-export const DEFAULT_TIMEOUT_MS = 20_000;
+export const DEFAULT_TIMEOUT_MS = 90_000;
 
 // Maps source name to its SVG icon id in the Perplexity UI — locale-independent
 const SOURCE_ICON: Record<string, string> = {
@@ -63,24 +63,50 @@ async function runSearch(query: string, timeoutMs: number, sources: string[] | n
     await searchBox.fill(query);
     await searchBox.press("Enter");
 
-    log("Waiting for answer to complete...");
-    // Perplexity shows a "N sources" button when the answer finishes.
-    // The word varies by UI language — match any button whose text contains digits.
-    await page.locator("button").filter({ hasText: /\d/ }).first().waitFor({ timeout: timeoutMs });
+    log("Waiting for search to start...");
+    // The "N sources" button (source count, e.g. "10 sources") appears while the answer text is
+    // STILL streaming, so it is only a "search started" signal — not completion. Completion is
+    // detected by answer-text stability in waitForStableAnswer below.
+    await page.locator("button").filter({ hasText: /sources/i }).filter({ hasText: /\d/ }).first().waitFor({ timeout: timeoutMs });
 
     await dismissDialogs(page);
 
-    log("Extracting answer from DOM...");
-    const [answer, citedSources] = await Promise.all([
-      extractAnswer(page),
-      extractSources(page),
-    ]);
+    log("Waiting for answer text to stabilize...");
+    const answer = await waitForStableAnswer(page, query, timeoutMs);
+
+    log("Extracting sources...");
+    const citedSources = await extractSources(page);
 
     log(`Done. Answer length: ${answer.length} chars, sources: ${citedSources.length}`);
     return { answer, sources: citedSources };
   } finally {
     await page.close();
   }
+}
+
+// Waits until the answer text is non-empty and unchanged across 3 consecutive reads (~4.5s),
+// so the tool does not return while the answer is still streaming. Bounded by the overall timeout.
+async function waitForStableAnswer(page: Page, query: string, timeoutMs: number): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let lastSig = "";
+  let stable = 0;
+  let lastAnswer = "";
+  while (Date.now() < deadline) {
+    const ans = await extractAnswer(page, query);
+    if (ans.length >= 20) {
+      const sig = `${ans.length}:${ans.slice(0, 80)}`;
+      if (sig === lastSig) {
+        stable += 1;
+        if (stable >= 3) return ans;
+      } else {
+        stable = 0;
+        lastSig = sig;
+      }
+      lastAnswer = ans;
+    }
+    await page.waitForTimeout(1500);
+  }
+  return lastAnswer;
 }
 
 // Selects the given sources in the Perplexity "Connecteurs et sources" submenu.
@@ -162,57 +188,59 @@ async function dismissDialogs(page: Page): Promise<void> {
   }
 }
 
-async function extractAnswer(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    const panel = document.querySelector('[role="tabpanel"]');
+async function extractAnswer(page: Page, query: string): Promise<string> {
+  return page.evaluate((q) => {
+    const selectAnswerPanel = (panels: Element[]): Element | null => {
+      const queryText = (q || "").trim();
+      // The answer panel echoes the user's query; prefer it over the "Sources"/"Shopping" panels.
+      if (queryText) {
+        const byQuery = panels.find((p) => (p.textContent || "").includes(queryText));
+        if (byQuery) return byQuery;
+      }
+      return (
+        panels.find((p) => /sources/i.test(p.textContent || "") && /\d/.test(p.textContent || "")) ??
+        panels.sort((a, b) => (b.textContent || "").length - (a.textContent || "").length)[0] ??
+        null
+      );
+    };
+
+    const panel = selectAnswerPanel(Array.from(document.querySelectorAll('[role="tabpanel"]')));
     if (!panel) return "";
 
-    function getCleanText(el: Element): string {
-      let text = "";
-      for (const node of Array.from(el.childNodes)) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          text += node.textContent ?? "";
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-          const child = node as Element;
-          const style = window.getComputedStyle(child);
-          // Skip citation chips: pointer cursor + short text (e.g. "wikipedia+3")
-          if (style.cursor === "pointer" && (child.textContent?.trim().length ?? 0) < 40) {
-            continue;
-          }
-          text += getCleanText(child);
-        }
-      }
-      return text;
+    const clone = panel.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll("button, [class*='cursor-pointer'], [role='button']").forEach((el) => el.remove());
+
+    const lines = (clone.innerText ?? "")
+      .replace(/\u00a0/g, " ")
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean);
+
+    // Strip the echoed query from the first line (the answer panel starts with it).
+    const queryTrimmed = (q || "").trim();
+    if (queryTrimmed && lines.length && lines[0].startsWith(queryTrimmed)) {
+      lines[0] = lines[0].slice(queryTrimmed.length).trim();
+      if (!lines[0]) lines.shift();
     }
 
-    const parts: string[] = [];
-    const seen = new Set<string>();
+    const followUps = lines.findIndex((l) => /^follow[- ]?ups?$/i.test(l));
+    if (followUps !== -1) lines.length = followUps;
 
-    panel.querySelectorAll("h2, h3, p, li, pre code").forEach((el) => {
-      if (el.tagName === "P" && el.closest("li")) return;
-      if (el.tagName === "LI" && el.querySelector("li")) return;
-
-      const tag = el.tagName.toLowerCase();
-      const text = getCleanText(el).trim().replace(/\s+/g, " ");
-      if (!text || seen.has(text)) return;
-      seen.add(text);
-
-      if (tag === "h2" || tag === "h3") {
-        parts.push(`\n## ${text}\n`);
-      } else if (tag === "code") {
-        parts.push(`\`\`\`\n${text}\n\`\`\``);
-      } else if (tag === "li") {
-        parts.push(`- ${text}`);
-      } else {
-        parts.push(text);
-      }
-    });
-
-    return parts.join("\n").trim();
-  });
+    return lines
+      .filter((l) => !/^searching/i.test(l) && !/^\d+\s*sources$/i.test(l))
+      .join("\n")
+      .replace(/searching the web\.{0,3}/gi, "")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }, query);
 }
 
 async function extractSources(page: Page): Promise<Source[]> {
+  const srcBtn = page.locator("button").filter({ hasText: /sources/i }).filter({ hasText: /\d/ }).first();
+  await srcBtn.click().catch(() => {});
+  await page.waitForTimeout(2000);
+
   return page.evaluate(() => {
     const sources: { title: string; url: string }[] = [];
     const seen = new Set<string>();
