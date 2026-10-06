@@ -14,7 +14,8 @@ A lightweight MCP (Model Context Protocol) server that enables AI assistants to 
 
 ### Key features
 
-- **Login once, search forever** — use the `login` tool to authenticate once; your session persists across restarts
+- **Login once, search forever** — inject a session cookie once; your session persists across restarts (~30 days)
+- **Model selection** — optional `model` parameter picks the answer model (GPT-5.6 Terra, Claude Sonnet 5, Gemini 3.8 Flash, Grok 4.6, …)
 - **Lazy browser launch** — the browser only opens on the first tool call, not at server startup
 - **Always visible browser** — runs non-headless to bypass Cloudflare's bot detection (the window stays in the background during searches)
 - **Sources included** — returns cited URLs alongside the answer text
@@ -27,6 +28,7 @@ A lightweight MCP (Model Context Protocol) server that enables AI assistants to 
 **Prerequisites:**
 - [Node.js](https://nodejs.org/) >= 20
 - Chromium (via Playwright): `npx playwright install chromium`
+- On a headless server: see **[docs/setup-headless-server.md](docs/setup-headless-server.md)** — Xvfb + cookie-injection login, verified end-to-end.
 
 ```bash
 npx playwright install chromium
@@ -90,6 +92,7 @@ Performs a search on Perplexity.ai using default settings and returns the answer
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `query` | `string` | Yes | The search query |
+| `model` | `string` | No | Answer model (see below) |
 
 **Returns:**
 
@@ -99,6 +102,42 @@ The capital of France is Paris...
 Sources:
 1. [Capital City of France - CountryReports](https://www.countryreports.org/...)
 ```
+
+### Model selection
+
+The `model` parameter (on both `search` and `search_advanced`) picks the answer model before submitting the query. Available values (as of 2026-09):
+
+| Value | UI name |
+|-------|---------|
+| `best` | Best (default; Perplexity picks) |
+| `gpt-5.6-terra` | GPT-5.6 Terra |
+| `gemini-3.8-flash` | Gemini 3.8 Flash |
+| `claude-sonnet-5` | Claude Sonnet 5 |
+| `kimi-k3` | Kimi K3 |
+| `glm-5.3` | GLM 5.3 |
+| `grok-4.6` | Grok 4.6 |
+| `nemotron-3-ultra` | Nemotron 3 Ultra |
+
+> "Max"-tier models (GPT-5.6 Sol, Claude Opus 5) are not selectable — they require a Max subscription. If your account is upgraded to Max, add them to `MODELS` in `src/index.ts` and `MODEL_LABELS` in `src/search.ts`.
+
+---
+
+### `ask_with_file`
+
+Ask Perplexity with **local file attachment(s)** — code, PDF, CSV, docs, images, audio/video. The files must be readable on the machine running this MCP server (absolute paths).
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `query` | `string` | Yes | Question/instruction about the attached file(s) |
+| `files` | `string[]` | Yes | 1–10 absolute paths on this server |
+| `model` | `string` | No | Answer model (see below) |
+| `timeout_seconds` | `int` | No | Max wait for the answer (default 180, max 600) |
+
+**How it works:** the composer has a hidden `input[type=file]` (accept list mirrors the UI); files are set directly on it, then the tool waits until every file name appears as an attachment chip before submitting — submitting earlier sends a query with no file. Returns the answer, sources, and the **thread URL** (`perplexity.ai/search/<uuid>`) so the chat stays re-openable.
+
+**Returns:** same as `search`, plus a `Thread:` line with the permanent URL.
 
 ---
 

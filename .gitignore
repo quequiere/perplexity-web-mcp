@@ -4,3 +4,4 @@ dist/
 network-analysis.md
 *.log
 .env
+perplexity.txt
